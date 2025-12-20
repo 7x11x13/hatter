@@ -12,6 +12,7 @@ export type FaceDetectionResult = faceapi.WithFaceLandmarks<
 
 interface FaceCanvasProps {
   image: HTMLImageElement;
+  filename: string;
   onError?: (error: string) => void;
   onFaceDetected?: (result: FaceDetectionResult) => void;
   onReset: () => void;
@@ -71,7 +72,7 @@ function createHatPoints(face: FaceDetectionResult): { left: Point; right: Point
   return { left: leftPoint, right: rightPoint };
 }
 
-export default function FaceCanvas({ image, onError, onFaceDetected, onReset }: FaceCanvasProps) {
+export default function FaceCanvas({ image, filename, onError, onFaceDetected, onReset }: FaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pixiAppRef = useRef<Application | null>(null);
@@ -82,7 +83,17 @@ export default function FaceCanvas({ image, onError, onFaceDetected, onReset }: 
   const handleDownload = useCallback(async () => {
     const canvas = canvasRef.current;
     const pixiApp = pixiAppRef.current;
+    const debugContainer = debugContainerRef.current;
     if (!canvas || !pixiApp) return;
+
+    // Hide debug graphics for the download
+    const debugWasVisible = debugContainer?.visible ?? false;
+    if (debugContainer) {
+      debugContainer.visible = false;
+    }
+
+    // Force PIXI to render before capturing
+    pixiApp.render();
 
     // Create a temporary canvas to composite both canvases
     const tempCanvas = document.createElement("canvas");
@@ -98,12 +109,18 @@ export default function FaceCanvas({ image, onError, onFaceDetected, onReset }: 
     const pixiCanvas = pixiApp.canvas as HTMLCanvasElement;
     ctx.drawImage(pixiCanvas, 0, 0);
 
+    // Restore debug visibility
+    if (debugContainer) {
+      debugContainer.visible = debugWasVisible;
+      pixiApp.render();
+    }
+
     // Download the composite
     const link = document.createElement("a");
-    link.download = "hat-image.png";
+    link.download = `${filename}-hatted.png`;
     link.href = tempCanvas.toDataURL("image/png");
     link.click();
-  }, []);
+  }, [filename]);
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface DropzoneProps {
-  onImageLoad: (image: HTMLImageElement) => void;
+  onImageLoad: (image: HTMLImageElement, filename: string) => void;
 }
 
 export default function Dropzone({ onImageLoad }: DropzoneProps) {
@@ -16,7 +16,9 @@ export default function Dropzone({ onImageLoad }: DropzoneProps) {
       reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-          onImageLoad(img);
+          // Extract filename without extension
+          const filename = file.name.replace(/\.[^/.]+$/, "") || "image";
+          onImageLoad(img, filename);
         };
         img.src = e.target?.result as string;
       };

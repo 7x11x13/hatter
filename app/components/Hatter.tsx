@@ -10,6 +10,7 @@ export default function Hatter() {
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [filename, setFilename] = useState<string>("");
 
   useEffect(() => {
     const loadModels = async () => {
@@ -26,8 +27,13 @@ export default function Hatter() {
     loadModels();
   }, []);
 
+  const handleImageLoad = (img: HTMLImageElement, name: string) => {
+    setImage(img);
+    setFilename(name);
+  };
+
   if (!image) {
-    return <Dropzone onImageLoad={setImage} />;
+    return <Dropzone onImageLoad={handleImageLoad} />;
   }
 
   if (!modelsLoaded) {
@@ -81,6 +87,7 @@ export default function Hatter() {
       )}
       <FaceCanvas
         image={image}
+        filename={filename}
         onError={setError}
         onReset={() => setImage(null)}
       />
