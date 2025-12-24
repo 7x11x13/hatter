@@ -8,10 +8,12 @@ interface DropzoneProps {
 
 export default function Dropzone({ onImageLoad }: DropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(
     (file: File) => {
+      setIsLoading(true);
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -20,7 +22,13 @@ export default function Dropzone({ onImageLoad }: DropzoneProps) {
           const filename = file.name.replace(/\.[^/.]+$/, "") || "image";
           onImageLoad(img, filename);
         };
+        img.onerror = () => {
+          setIsLoading(false);
+        };
         img.src = e.target?.result as string;
+      };
+      reader.onerror = () => {
+        setIsLoading(false);
       };
       reader.readAsDataURL(file);
     },
@@ -70,6 +78,17 @@ export default function Dropzone({ onImageLoad }: DropzoneProps) {
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-80 w-full flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-300 border-t-red-500" />
+        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          Loading image...
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
