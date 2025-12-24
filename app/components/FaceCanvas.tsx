@@ -115,11 +115,45 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
       pixiApp.render();
     }
 
-    // Download the composite
-    const link = document.createElement("a");
-    link.download = `${filename}-hatted.png`;
-    link.href = tempCanvas.toDataURL("image/png");
-    link.click();
+    // Check if we're on iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    if (isIOS && navigator.share && navigator.canShare) {
+      // On iOS, use the Web Share API to trigger the native share sheet
+      // which allows saving to Photos
+      try {
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          tempCanvas.toBlob((b) => {
+            if (b) resolve(b);
+            else reject(new Error("Failed to create blob"));
+          }, "image/png");
+        });
+
+        const file = new File([blob], `${filename}-hatted.png`, { type: "image/png" });
+
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+          });
+          return;
+        }
+      } catch (err) {
+        // If share was cancelled or failed, fall through to open in new tab
+        if (err instanceof Error && err.name === "AbortError") {
+          return; // User cancelled, do nothing
+        }
+      }
+
+      // Fallback for iOS: open image in new tab so user can long-press to save
+      const dataUrl = tempCanvas.toDataURL("image/png");
+      window.open(dataUrl, "_blank");
+    } else {
+      // Desktop: use traditional download
+      const link = document.createElement("a");
+      link.download = `${filename}-hatted.png`;
+      link.href = tempCanvas.toDataURL("image/png");
+      link.click();
+    }
   }, [filename]);
 
   useEffect(() => {
