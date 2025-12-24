@@ -115,10 +115,7 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
       pixiApp.render();
     }
 
-    // Check if we're on iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-    if (isIOS && navigator.share && navigator.canShare) {
+    if (navigator.share && navigator.canShare) {
       // On iOS, use the Web Share API to trigger the native share sheet
       // which allows saving to Photos
       try {
