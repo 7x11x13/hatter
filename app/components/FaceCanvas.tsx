@@ -223,9 +223,16 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
         // Load the santa hat texture
         const hatTexture = await Assets.load<Texture>(`santa_hat.webp`);
 
+        // Sort faces from smallest to largest so distant faces are drawn first
+        const sortedFaces = [...faces].sort((a, b) => {
+          const areaA = a.detection.box.width * a.detection.box.height;
+          const areaB = b.detection.box.width * b.detection.box.height;
+          return areaA - areaB;
+        });
+
         // Process each detected face
-        for (let faceIndex = 0; faceIndex < faces.length; faceIndex++) {
-          const face = faces[faceIndex];
+        for (let faceIndex = 0; faceIndex < sortedFaces.length; faceIndex++) {
+          const face = sortedFaces[faceIndex];
 
           // Debug: Draw face bounding box
           const { x, y, width, height } = face.detection.box;
