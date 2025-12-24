@@ -19,15 +19,14 @@ interface FaceCanvasProps {
 }
 
 async function detectFaces(
-  image: HTMLImageElement,
-  minConfidence: number
+  image: HTMLImageElement
 ): Promise<FaceDetectionResult[]> {
   // Try to detect all faces first
   const faces = await faceapi
     .detectAllFaces(
       image,
       new faceapi.SsdMobilenetv1Options({
-        minConfidence,
+        minConfidence: 0.5,
       })
     )
     .withFaceLandmarks();
@@ -36,7 +35,7 @@ async function detectFaces(
     return faces;
   }
 
-  // Fallback to single face detection with lowest confidence threshold
+  // Fallback to single face detection with lower confidence threshold
   const singleFace = await faceapi
     .detectSingleFace(
       image,
@@ -95,7 +94,6 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
   const debugContainerRef = useRef<Container | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [minConfidence, setMinConfidence] = useState(0.5);
 
   const handleDownload = useCallback(async () => {
     const canvas = canvasRef.current;
@@ -188,7 +186,7 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
         ctx.drawImage(image, 0, 0);
 
         // Detect all faces
-        const faces = await detectFaces(image, minConfidence);
+        const faces = await detectFaces(image);
         onFacesDetected?.(faces);
         setIsLoading(false);
 
@@ -329,7 +327,7 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
         pixiAppRef.current = null;
       }
     };
-  }, [image, minConfidence, onError, onFacesDetected]);
+  }, [image, onError, onFacesDetected]);
 
   // Toggle debug visibility
   useEffect(() => {
@@ -357,7 +355,7 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
           </div>
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-3">
+      <div className="flex gap-3">
         <button
           onClick={onReset}
           className="rounded-full border border-zinc-300 px-6 py-2.5 font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -383,18 +381,6 @@ export default function FaceCanvas({ image, filename, onError, onFacesDetected, 
             <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
           </div>
         </label>
-        <div className="flex items-center gap-2 rounded-full border border-zinc-300 px-4 py-2 dark:border-zinc-700">
-          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Sensitivity</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={1 - minConfidence}
-            onChange={(e) => setMinConfidence(1 - parseFloat(e.target.value))}
-            className="h-2 w-24 cursor-pointer appearance-none rounded-full bg-zinc-300 dark:bg-zinc-600 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-red-500"
-          />
-        </div>
       </div>
     </div>
   );
