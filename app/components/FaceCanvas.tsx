@@ -14,14 +14,29 @@ interface FaceCanvasProps {
   image: HTMLImageElement;
   filename: string;
   onError?: (error: string) => void;
-  onFaceDetected?: (result: FaceDetectionResult) => void;
+  onFacesDetected?: (results: FaceDetectionResult[]) => void;
   onReset: () => void;
 }
 
-async function detectFace(
+async function detectFaces(
   image: HTMLImageElement
-): Promise<FaceDetectionResult> {
-  const face = await faceapi
+): Promise<FaceDetectionResult[]> {
+  // Try to detect all faces first
+  const faces = await faceapi
+    .detectAllFaces(
+      image,
+      new faceapi.SsdMobilenetv1Options({
+        minConfidence: 0.5,
+      })
+    )
+    .withFaceLandmarks();
+
+  if (faces && faces.length > 0) {
+    return faces;
+  }
+
+  // Fallback to single face detection with lower confidence threshold
+  const singleFace = await faceapi
     .detectSingleFace(
       image,
       new faceapi.SsdMobilenetv1Options({
@@ -31,11 +46,11 @@ async function detectFace(
     )
     .withFaceLandmarks();
 
-  if (!face) {
-    throw new Error("No face detected");
+  if (!singleFace) {
+    throw new Error("No faces detected");
   }
 
-  return face;
+  return [singleFace];
 }
 
 function createHatPoints(face: FaceDetectionResult): { left: Point; right: Point } {
@@ -72,7 +87,7 @@ function createHatPoints(face: FaceDetectionResult): { left: Point; right: Point
   return { left: leftPoint, right: rightPoint };
 }
 
-export default function FaceCanvas({ image, filename, onError, onFaceDetected, onReset }: FaceCanvasProps) {
+export default function FaceCanvas({ image, filename, onError, onFacesDetected, onReset }: FaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pixiAppRef = useRef<Application | null>(null);
@@ -170,9 +185,9 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
         canvas.height = image.height;
         ctx.drawImage(image, 0, 0);
 
-        // Detect face
-        const face = await detectFace(image);
-        onFaceDetected?.(face);
+        // Detect all faces
+        const faces = await detectFaces(image);
+        onFacesDetected?.(faces);
         setIsLoading(false);
 
         // Initialize PIXI app
@@ -205,87 +220,92 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
         const debugGraphics = new Graphics();
         debugContainer.addChild(debugGraphics);
 
-        // Debug: Draw face bounding box
-        const { x, y, width, height } = face.detection.box;
-        debugGraphics.rect(x, y, width, height);
-        debugGraphics.stroke({ color: 0xff0000, width: 3 });
-
-        // Debug: Draw all 68 face landmarks
-        const landmarks = face.landmarks.positions;
-        for (let i = 0; i < landmarks.length; i++) {
-          const point = landmarks[i];
-          debugGraphics.circle(point.x, point.y, 3);
-          debugGraphics.fill({ color: 0x00ff00 });
-
-          // Draw landmark index
-          const label = new Text({
-            text: String(i),
-            style: { fontSize: 10, fill: 0xffff00 },
-          });
-          label.x = point.x + 4;
-          label.y = point.y - 10;
-          debugContainer.addChild(label);
-        }
-
         // Load the santa hat texture
         const hatTexture = await Assets.load<Texture>(`santa_hat.webp`);
 
-        // Get the left and right hat points on the face
-        const hatPoints = createHatPoints(face);
+        // Process each detected face
+        for (let faceIndex = 0; faceIndex < faces.length; faceIndex++) {
+          const face = faces[faceIndex];
 
-        // Debug: Draw hat points
-        debugGraphics.circle(hatPoints.left.x, hatPoints.left.y, 5);
-        debugGraphics.fill({ color: 0x00ffff });
-        debugGraphics.stroke({ color: 0x0000ff, width: 2 });
-        const leftLabel = new Text({
-          text: "L",
-          style: { fontSize: 12, fill: 0xffffff },
-        });
-        leftLabel.x = hatPoints.left.x + 8;
-        leftLabel.y = hatPoints.left.y - 6;
-        debugContainer.addChild(leftLabel);
+          // Debug: Draw face bounding box
+          const { x, y, width, height } = face.detection.box;
+          debugGraphics.rect(x, y, width, height);
+          debugGraphics.stroke({ color: 0xff0000, width: 3 });
 
-        debugGraphics.circle(hatPoints.right.x, hatPoints.right.y, 5);
-        debugGraphics.fill({ color: 0x00ffff });
-        debugGraphics.stroke({ color: 0x0000ff, width: 2 });
-        const rightLabel = new Text({
-          text: "R",
-          style: { fontSize: 12, fill: 0xffffff },
-        });
-        rightLabel.x = hatPoints.right.x + 8;
-        rightLabel.y = hatPoints.right.y - 6;
-        debugContainer.addChild(rightLabel);
+          // Debug: Draw all 68 face landmarks
+          const landmarks = face.landmarks.positions;
+          for (let i = 0; i < landmarks.length; i++) {
+            const point = landmarks[i];
+            debugGraphics.circle(point.x, point.y, 3);
+            debugGraphics.fill({ color: 0x00ff00 });
 
-        // Calculate the distance and angle between face hat points
-        const faceDx = hatPoints.right.x - hatPoints.left.x;
-        const faceDy = hatPoints.right.y - hatPoints.left.y;
-        const faceDistance = Math.sqrt(faceDx * faceDx + faceDy * faceDy);
-        const faceAngle = Math.atan2(faceDy, faceDx);
+            // Draw landmark index
+            const label = new Text({
+              text: String(i),
+              style: { fontSize: 10, fill: 0xffff00 },
+            });
+            label.x = point.x + 4;
+            label.y = point.y - 10;
+            debugContainer.addChild(label);
+          }
 
-        // Calculate the distance and angle between hat brim points in the image
-        const brimDx = HAT_RIGHT_POINT[0] - HAT_LEFT_POINT[0];
-        const brimDy = HAT_RIGHT_POINT[1] - HAT_LEFT_POINT[1];
-        const brimDistance = Math.sqrt(brimDx * brimDx + brimDy * brimDy);
-        const brimAngle = Math.atan2(brimDy, brimDx);
+          // Get the left and right hat points on the face
+          const hatPoints = createHatPoints(face);
 
-        // Calculate scale and rotation
-        const scale = faceDistance / brimDistance;
-        const rotation = faceAngle - brimAngle;
+          // Debug: Draw hat points
+          debugGraphics.circle(hatPoints.left.x, hatPoints.left.y, 5);
+          debugGraphics.fill({ color: 0x00ffff });
+          debugGraphics.stroke({ color: 0x0000ff, width: 2 });
+          const leftLabel = new Text({
+            text: `L${faceIndex}`,
+            style: { fontSize: 12, fill: 0xffffff },
+          });
+          leftLabel.x = hatPoints.left.x + 8;
+          leftLabel.y = hatPoints.left.y - 6;
+          debugContainer.addChild(leftLabel);
 
-        // Create the hat sprite
-        const hatSprite = new Sprite(hatTexture);
+          debugGraphics.circle(hatPoints.right.x, hatPoints.right.y, 5);
+          debugGraphics.fill({ color: 0x00ffff });
+          debugGraphics.stroke({ color: 0x0000ff, width: 2 });
+          const rightLabel = new Text({
+            text: `R${faceIndex}`,
+            style: { fontSize: 12, fill: 0xffffff },
+          });
+          rightLabel.x = hatPoints.right.x + 8;
+          rightLabel.y = hatPoints.right.y - 6;
+          debugContainer.addChild(rightLabel);
 
-        // Set the pivot to the left brim point so it rotates/scales around that point
-        hatSprite.pivot.set(HAT_LEFT_POINT[0], HAT_LEFT_POINT[1]);
+          // Calculate the distance and angle between face hat points
+          const faceDx = hatPoints.right.x - hatPoints.left.x;
+          const faceDy = hatPoints.right.y - hatPoints.left.y;
+          const faceDistance = Math.sqrt(faceDx * faceDx + faceDy * faceDy);
+          const faceAngle = Math.atan2(faceDy, faceDx);
 
-        // Position the sprite so the left brim aligns with the left face point
-        hatSprite.position.set(hatPoints.left.x, hatPoints.left.y);
+          // Calculate the distance and angle between hat brim points in the image
+          const brimDx = HAT_RIGHT_POINT[0] - HAT_LEFT_POINT[0];
+          const brimDy = HAT_RIGHT_POINT[1] - HAT_LEFT_POINT[1];
+          const brimDistance = Math.sqrt(brimDx * brimDx + brimDy * brimDy);
+          const brimAngle = Math.atan2(brimDy, brimDx);
 
-        // Apply scale and rotation
-        hatSprite.scale.set(scale);
-        hatSprite.rotation = rotation;
+          // Calculate scale and rotation
+          const scale = faceDistance / brimDistance;
+          const rotation = faceAngle - brimAngle;
 
-        pixiApp.stage.addChild(hatSprite);
+          // Create the hat sprite
+          const hatSprite = new Sprite(hatTexture);
+
+          // Set the pivot to the left brim point so it rotates/scales around that point
+          hatSprite.pivot.set(HAT_LEFT_POINT[0], HAT_LEFT_POINT[1]);
+
+          // Position the sprite so the left brim aligns with the left face point
+          hatSprite.position.set(hatPoints.left.x, hatPoints.left.y);
+
+          // Apply scale and rotation
+          hatSprite.scale.set(scale);
+          hatSprite.rotation = rotation;
+
+          pixiApp.stage.addChild(hatSprite);
+        }
       } catch (err) {
         setIsLoading(false);
         onError?.(err instanceof Error ? err.message : String(err));
@@ -300,7 +320,7 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
         pixiAppRef.current = null;
       }
     };
-  }, [image, onError, onFaceDetected]);
+  }, [image, onError, onFacesDetected]);
 
   // Toggle debug visibility
   useEffect(() => {
@@ -323,7 +343,7 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent" />
-              <span className="text-sm font-medium text-white">Detecting face...</span>
+              <span className="text-sm font-medium text-white">Detecting faces...</span>
             </div>
           </div>
         )}
