@@ -155,10 +155,13 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
         pixiAppRef.current = pixiApp;
 
         // Style and position the PIXI canvas to overlay
+        // Both canvases need identical sizing so they scale together
         const pixiCanvas = pixiApp.canvas as HTMLCanvasElement;
         pixiCanvas.style.position = "absolute";
         pixiCanvas.style.top = "0";
         pixiCanvas.style.left = "0";
+        pixiCanvas.style.width = "100%";
+        pixiCanvas.style.height = "100%";
         pixiCanvas.style.pointerEvents = "none";
         containerRef.current!.appendChild(pixiCanvas);
 
@@ -283,7 +286,7 @@ export default function FaceCanvas({ image, filename, onError, onFaceDetected, o
       >
         <canvas
           ref={canvasRef}
-          className="max-h-[500px] max-w-full object-contain"
+          className="block max-h-[500px] max-w-full"
         />
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50">
